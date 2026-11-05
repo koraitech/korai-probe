@@ -1,0 +1,7 @@
+apiVersion: v2
+name: korai-probe
+description: Korai private probe. Runs Korai uptime checks inside this cluster's network and sends the results to Korai.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://github.com/koraitech/korai-probe

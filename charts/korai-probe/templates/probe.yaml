@@ -1,0 +1,92 @@
+{{- if and (not .Values.token) (not .Values.existingSecret) }}
+{{- fail "set token to the install token Korai shows (Uptime checks > Private probes), or existingSecret" }}
+{{- end }}
+{{- if not .Values.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "korai-probe.secret" . }}
+  labels: {{- include "korai-probe.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  token: {{ .Values.token | quote }}
+---
+{{- end }}
+{{- if .Values.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-state
+  labels: {{- include "korai-probe.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep   # the credential survives an uninstall and reinstall
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "korai-probe.labels" . | nindent 4 }}
+spec:
+  replicas: 1                 # one probe, one credential: add a second probe in Korai for redundancy
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: korai-probe
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels: {{- include "korai-probe.labels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: probe
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: KORAI_PROBE_TOKEN
+              valueFrom:
+                secretKeyRef: { name: {{ include "korai-probe.secret" . }}, key: token }
+            {{- with .Values.httpsProxy }}
+            - { name: HTTPS_PROXY, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.noProxy }}
+            - { name: NO_PROXY, value: {{ . | quote }} }
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - { name: state, mountPath: /var/lib/korai-probe }
+      volumes:
+        - name: state
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim: { claimName: {{ .Release.Name }}-state }
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,28 @@
+# The install token from Korai (Uptime checks > Private probes > Add private probe). It is the only setting.
+token: ""
+# Or the name of an existing Secret holding it under the key "token" (then "token" above is not used).
+existingSecret: ""
+
+image:
+  repository: ghcr.io/koraitech/korai-probe
+  tag: ""            # the chart's appVersion
+  pullPolicy: IfNotPresent
+
+# The probe keeps its credential and the results waiting to be sent here. Without persistence a restarted pod has
+# no credential and needs a new install token.
+persistence:
+  enabled: true
+  size: 256Mi
+  storageClass: ""
+
+# Only for reaching Korai, never for the checks.
+httpsProxy: ""
+noProxy: ""
+
+resources:
+  requests: { cpu: 10m, memory: 32Mi }
+  limits: { memory: 128Mi }
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
