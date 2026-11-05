@@ -27,6 +27,8 @@ jobs:
           echo "full=$v" >> "$GITHUB_OUTPUT"
           echo "minor=${v%.*}" >> "$GITHUB_OUTPUT"
           echo "major=${v%%.*}" >> "$GITHUB_OUTPUT"
+      - name: Release notes exist
+        run: grep -qx "## $GITHUB_REF_NAME" CHANGELOG.md || { echo "add a section \"## $GITHUB_REF_NAME\" to CHANGELOG.md"; exit 1; }
       - name: Test
         run: go vet ./... && go test -race -count=1 ./...
       - name: Binaries
@@ -61,4 +63,12 @@ jobs:
           helm push "korai-probe-${{ steps.v.outputs.full }}.tgz" oci://ghcr.io/koraitech/charts
       - name: GitHub release
         env: { GH_TOKEN: "${{ github.token }}" }
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          # the notes are the tag's section of CHANGELOG.md (from "## vX.Y.Z" to the next "## ")
+          awk -v h="## $GITHUB_REF_NAME" '$0==h{on=1;next} on&&/^## /{exit} on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "CHANGELOG.md has no section $GITHUB_REF_NAME"; exit 1; }
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+          fi
