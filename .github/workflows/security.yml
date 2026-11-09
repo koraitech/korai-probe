@@ -1,0 +1,139 @@
+# Security scan: secrets, dependency CVEs, IaC/Dockerfile/K8s misconfig,
+# SAST and GitHub Actions hardening.
+#
+# - Pull requests: report-only, except new secrets in the PR commits (fails).
+# - Nightly: full scan incl. git history; reports kept as an artifact so the
+#   weekly review can triage them (private repos only).
+# - Reviewed false positives: .gitleaksignore (one fingerprint per line).
+name: security
+
+on:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # PUBLIC=true keeps findings out of public logs/artifacts (counts only).
+  PUBLIC: "true"
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  TRIVY_VERSION: 0.76.2
+  TRIVY_SHA256: bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
+  ACTIONLINT_VERSION: 1.7.12
+  ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+  ZIZMOR_VERSION: 1.32.0
+  SEMGREP_VERSION: 1.184.0
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install scanners (pinned + checksum verified)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin" && cd "$RUNNER_TEMP"
+          fetch() { # url sha256
+            curl -sSLf -o pkg.tgz "$1"
+            echo "$2  pkg.tgz" | sha256sum -c - >/dev/null
+            tar -xzf pkg.tgz -C bin && rm pkg.tgz
+          }
+          fetch "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" "$GITLEAKS_SHA256"
+          fetch "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" "$TRIVY_SHA256"
+          fetch "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" "$ACTIONLINT_SHA256"
+          python -m pip install -q "zizmor==${ZIZMOR_VERSION}" "semgrep==${SEMGREP_VERSION}"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Secrets (gitleaks)
+        id: secrets
+        run: |
+          set -uo pipefail
+          mkdir -p reports
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+            gitleaks git --redact --no-banner --log-opts="$range" -f json -r reports/gitleaks.json . >/dev/null 2>&1
+          else
+            gitleaks git --redact --no-banner -f json -r reports/gitleaks.json . >/dev/null 2>&1
+          fi
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Dependencies, IaC, Dockerfiles, K8s (trivy)
+        run: |
+          trivy fs --quiet --scanners vuln,misconfig --severity MEDIUM,HIGH,CRITICAL \
+            --skip-dirs node_modules,.git -f json -o reports/trivy.json . || true
+
+      - name: SAST (semgrep CE rules)
+        run: |
+          semgrep scan --metrics off --quiet --config p/default \
+            --exclude node_modules --json -o reports/semgrep.json . >/dev/null 2>&1 || true
+
+      - name: GitHub Actions hardening (zizmor, actionlint)
+        if: hashFiles('.github/workflows/*') != ''
+        run: |
+          zizmor --offline --format json .github/workflows > reports/zizmor.json 2>/dev/null || true
+          actionlint -ignore 'label ".+" is unknown' -format '{{json .}}' > reports/actionlint.json 2>/dev/null || true
+
+      - name: Summary
+        if: always()
+        run: |
+          python - <<'EOF'
+          import json, os, pathlib
+          r = pathlib.Path("reports")
+          def load(n):
+              try: return json.loads((r / n).read_text() or "null")
+              except Exception: return None
+          rows = []
+          gl = load("gitleaks.json") or []
+          rows.append(("Secrets (gitleaks)", len(gl)))
+          tv = load("trivy.json") or {}
+          sev = {}
+          for res in tv.get("Results") or []:
+              for v in (res.get("Vulnerabilities") or []) + (res.get("Misconfigurations") or []):
+                  sev[v.get("Severity")] = sev.get(v.get("Severity"), 0) + 1
+          rows.append(("Deps + misconfig (trivy) CRITICAL", sev.get("CRITICAL", 0)))
+          rows.append(("Deps + misconfig (trivy) HIGH", sev.get("HIGH", 0)))
+          rows.append(("Deps + misconfig (trivy) MEDIUM", sev.get("MEDIUM", 0)))
+          sg = load("semgrep.json") or {}
+          rows.append(("SAST (semgrep)", len(sg.get("results") or [])))
+          zz = load("zizmor.json") or []
+          rows.append(("Actions (zizmor)", len(zz)))
+          al = load("actionlint.json") or []
+          rows.append(("Actions (actionlint)", len(al)))
+          out = ["## Security scan", "", "| Check | Findings |", "|---|---|"]
+          out += [f"| {k} | {v} |" for k, v in rows]
+          if os.environ.get("PUBLIC") == "true":
+              out += ["", "Details are triaged privately."]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("\n".join(out) + "\n")
+          EOF
+
+      - name: Keep reports
+        if: always() && env.PUBLIC != 'true' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: security-reports
+          path: reports/
+          retention-days: 14
+
+      - name: Fail on new secrets in this PR
+        if: github.event_name == 'pull_request' && steps.secrets.outputs.rc == '1'
+        run: |
+          echo "::error::gitleaks found a secret in this PR's commits. Rotate it and remove it from history."
+          exit 1
