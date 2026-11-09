@@ -77,12 +77,16 @@ jobs:
       - name: Dependencies, IaC, Dockerfiles, K8s (trivy)
         run: |
           trivy fs --quiet --scanners vuln,misconfig --severity MEDIUM,HIGH,CRITICAL \
-            --skip-dirs node_modules,.git -f json -o reports/trivy.json . || true
+            --skip-dirs node_modules,.git -f json -o reports/trivy.json . 2>reports/trivy.err \
+            || { echo "::warning::trivy failed"; tail -n 5 reports/trivy.err; }
 
       - name: SAST (semgrep CE rules)
         run: |
+          rc=0
           semgrep scan --metrics off --quiet --config p/default \
-            --exclude node_modules --json -o reports/semgrep.json . >/dev/null 2>&1 || true
+            --exclude node_modules --json -o reports/semgrep.json . >/dev/null 2>reports/semgrep.err || rc=$?
+          # 0 = clean, 1 = findings, anything else = the scan itself failed
+          if [ "$rc" -gt 1 ]; then echo "::warning::semgrep failed (exit $rc)"; tail -n 5 reports/semgrep.err; fi
 
       - name: GitHub Actions hardening (zizmor, actionlint)
         if: hashFiles('.github/workflows/*') != ''
@@ -102,7 +106,8 @@ jobs:
           rows = []
           gl = load("gitleaks.json") or []
           rows.append(("Secrets (gitleaks)", len(gl)))
-          tv = load("trivy.json") or {}
+          tv = load("trivy.json")
+          if tv is None: rows.append(("trivy", "scan failed")); tv = {}
           sev = {}
           for res in tv.get("Results") or []:
               for v in (res.get("Vulnerabilities") or []) + (res.get("Misconfigurations") or []):
@@ -111,7 +116,7 @@ jobs:
           rows.append(("Deps + misconfig (trivy) HIGH", sev.get("HIGH", 0)))
           rows.append(("Deps + misconfig (trivy) MEDIUM", sev.get("MEDIUM", 0)))
           sg = load("semgrep.json") or {}
-          rows.append(("SAST (semgrep)", len(sg.get("results") or [])))
+          rows.append(("SAST (semgrep)", len(sg["results"]) if "results" in sg else "scan failed"))
           zz = load("zizmor.json") or []
           rows.append(("Actions (zizmor)", len(zz)))
           al = load("actionlint.json") or []
