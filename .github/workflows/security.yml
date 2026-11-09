@@ -2,15 +2,16 @@
 # SAST and GitHub Actions hardening.
 #
 # - Pull requests: report-only, except new secrets in the PR commits (fails).
-# - Nightly: full scan incl. git history; reports kept as an artifact so the
-#   weekly review can triage them (private repos only).
+# - Daily, Mon-Fri 07:15 UTC (08:15/09:15 Madrid), while the CI runners
+#   are already warm: full scan incl. git history; reports kept as an
+#   artifact so the weekly review can triage them (private repos only).
 # - Reviewed false positives: .gitleaksignore (one fingerprint per line).
 name: security
 
 on:
   pull_request:
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "15 7 * * 1-5"
   workflow_dispatch:
 
 permissions:
