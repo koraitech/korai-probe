@@ -76,8 +76,8 @@ spec:
             - name: KORAI_REDIS_SLOWLOG
               valueFrom:
                 secretKeyRef: { name: {{ include "korai-probe.redisSecret" . }}, key: urls }
-            {{- if not .Values.redisSlowlog.keys }}
-            - { name: KORAI_REDIS_SLOWLOG_KEYS, value: "0" }
+            {{- if .Values.redisSlowlog.keys }}
+            - { name: KORAI_REDIS_SLOWLOG_KEYS, value: "1" }
             {{- end }}
             {{- if .Values.redisSlowlog.caSecret }}
             - { name: KORAI_REDIS_CA_FILE, value: /etc/korai-probe/redis-ca/ca.crt }

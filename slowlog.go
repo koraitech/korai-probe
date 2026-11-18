@@ -339,7 +339,8 @@ type cursor struct {
 }
 
 // fresh returns the entries not sent yet, oldest first. On the first read it takes only entries newer than since;
-// when the ids go backwards (the server restarted or SLOWLOG RESET) it starts over from the last time it saw.
+// when the ids go backwards (the server restarted; SLOWLOG RESET empties the log but keeps the counter) it starts
+// over from the last time it saw.
 func (c *cursor) fresh(es []SlowEntry, since int64) []SlowEntry {
 	if len(es) == 0 {
 		return nil
@@ -405,7 +406,7 @@ func newSlowlog(st *State, env func(string) string) *slowlog {
 	if len(ts) == 0 {
 		return nil
 	}
-	s := &slowlog{st: st, targets: ts, keys: env("KORAI_REDIS_SLOWLOG_KEYS") != "0", cursors: map[string]*cursor{}, now: time.Now}
+	s := &slowlog{st: st, targets: ts, keys: env("KORAI_REDIS_SLOWLOG_KEYS") == "1", cursors: map[string]*cursor{}, now: time.Now}
 	if f := env("KORAI_REDIS_CA_FILE"); f != "" {
 		pem, err := os.ReadFile(f)
 		pool, _ := x509.SystemCertPool()

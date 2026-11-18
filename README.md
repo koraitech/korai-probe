@@ -72,9 +72,11 @@ helm upgrade --install korai-probe oci://ghcr.io/koraitech/charts/korai-probe -n
   `KORAI_REDIS_CA_FILE` (Helm: `redisSlowlog.caSecret`, a Secret with `ca.crt`). `?insecure=1` skips the certificate
   check; prefer the CA.
 - The user needs only `SLOWLOG` (and `AUTH`): with ACLs, `+slowlog|get`.
-- **Privacy.** Argument values, client addresses and client names never leave the probe. An entry carries the command
-  name and, for commands that take a key, the key as a pattern: numbers, hex ids and UUIDs become `?`, so
-  `GET cart:91822` is sent as `GET cart:?`. `KORAI_REDIS_SLOWLOG_KEYS=0` sends only command names. Korai masks the
+- **Privacy.** Argument values, keys, client addresses and client names never leave the probe by default: an entry
+  carries the command name (`GET`, `HGETALL`), its duration and the number of arguments. Keys can hold personal data
+  or tokens (`session:jane@example.com`), so they are off unless you set `KORAI_REDIS_SLOWLOG_KEYS=1`; then, for
+  commands that take a key, the key is sent as a pattern where numbers, hex ids and UUIDs become `?`
+  (`GET cart:91822` is sent as `GET cart:?`), and anything else in the key goes out as it is. Korai masks the
   commands again when it receives them.
 - Each server's status (read, or the reason it could not be read) shows on the probe in Korai. Entries wait in memory
   (up to 5,000) while Korai cannot take them.
@@ -102,7 +104,7 @@ Report a vulnerability privately through **Security › Report a vulnerability**
 | `KORAI_PROBE_STATE_DIR` | `/var/lib/korai-probe` | Credential, cached checks and results waiting to be sent. |
 | `KORAI_REDIS_SLOWLOG` | | Optional. Redis / Valkey URLs whose slowlog the probe reads (see above). |
 | `KORAI_REDIS_CA_FILE` | | Optional. CA certificate (PEM) for `rediss://` servers, e.g. the Memorystore server CA. |
-| `KORAI_REDIS_SLOWLOG_KEYS` | `1` | `0` sends only command names, not key patterns. |
+| `KORAI_REDIS_SLOWLOG_KEYS` | `0` | `1` also sends each command's key as a pattern (ids masked). Off by default: keys can hold personal data. |
 | `HTTPS_PROXY`, `NO_PROXY` | | A proxy for reaching Korai. |
 
 ## Develop
