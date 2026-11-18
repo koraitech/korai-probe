@@ -24,8 +24,9 @@ redisSlowlog:
   existingSecret: ""
   # A Secret with the CA certificate of the servers under the key "ca.crt" (Memorystore with in-transit encryption).
   caSecret: ""
-  # false: send only command names, not even key patterns.
-  keys: true
+  # true: also send key patterns (numbers, hex ids and UUIDs masked). Off by default: keys can hold emails, names
+  # or tokens that the masking does not catch.
+  keys: false
 
 # Only for reaching Korai, never for the checks.
 httpsProxy: ""

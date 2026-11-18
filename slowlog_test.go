@@ -189,7 +189,7 @@ func TestSlowlogReadsTheServerAndPostsMaskedEntries(t *testing.T) {
 	defer srv.Close()
 
 	st := &State{KoraiURL: srv.URL, Credential: "kprb_x"}
-	env := map[string]string{"KORAI_REDIS_SLOWLOG": "redis://:s3cret@" + addr + "?name=cache, redis://:wrong@" + addr + "?name=other"}
+	env := map[string]string{"KORAI_REDIS_SLOWLOG_KEYS": "1", "KORAI_REDIS_SLOWLOG": "redis://:s3cret@" + addr + "?name=cache, redis://:wrong@" + addr + "?name=other"}
 	sl := newSlowlog(st, func(k string) string { return env[k] })
 	if sl == nil || len(sl.targets) != 1 {
 		// both URLs point at the same host:port, so the second is a duplicate
@@ -268,5 +268,29 @@ func TestSlowlogRefusesMetadataAddresses(t *testing.T) {
 	_, err := sl.readServer(context.Background(), redisTarget{Name: "md", Host: "169.254.169.254", Port: 6379})
 	if err == nil || describeRedisError(err) != "blocked: link-local or metadata address" {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestKeysAreOffByDefault(t *testing.T) {
+	sl := newSlowlog(&State{}, func(k string) string {
+		if k == "KORAI_REDIS_SLOWLOG" {
+			return "redis://10.0.0.3"
+		}
+		return ""
+	})
+	if sl == nil || sl.keys {
+		t.Fatalf("keys must be off unless KORAI_REDIS_SLOWLOG_KEYS=1: %+v", sl)
+	}
+	for _, args := range [][]string{
+		{"GET", "session:jose@example.com"},
+		{"HGETALL", "customer:john_smith"},
+		{"SET", "password-reset:abcdefghijklmnop", "1"},
+		{"GET", "order:01ARZ3NDEKTSV4RRFFQ69G5FAV"},
+		{"GET", "blob:aGVsbG8gd29ybGQ="},
+		{"JSON.GET", "account:premium-customer-name", "$"},
+	} {
+		if _, sent := describeCommand(args, sl.keys); sent != strings.ToUpper(args[0]) {
+			t.Errorf("%q sent %q", args, sent)
+		}
 	}
 }

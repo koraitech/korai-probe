@@ -73,9 +73,10 @@ helm upgrade --install korai-probe oci://ghcr.io/koraitech/charts/korai-probe -n
   check; prefer the CA.
 - The user needs only `SLOWLOG` (and `AUTH`): with ACLs, `+slowlog|get`.
 - **Privacy.** Argument values, client addresses and client names never leave the probe. An entry carries the command
-  name and, for commands that take a key, the key as a pattern: numbers, hex ids and UUIDs become `?`, so
-  `GET cart:91822` is sent as `GET cart:?`. `KORAI_REDIS_SLOWLOG_KEYS=0` sends only command names. Korai masks the
-  commands again when it receives them.
+  name only. With `KORAI_REDIS_SLOWLOG_KEYS=1` (Helm: `redisSlowlog.keys: true`) it also carries, for commands that
+  take a key, the key as a pattern: numbers, hex ids and UUIDs become `?`, so `GET cart:91822` is sent as
+  `GET cart:?`. Turn it on only for key namespaces you know: the masking does not catch emails, names or tokens in
+  keys. Korai masks the commands again when it receives them.
 - Each server's status (read, or the reason it could not be read) shows on the probe in Korai. Entries wait in memory
   (up to 5,000) while Korai cannot take them.
 
@@ -102,7 +103,7 @@ Report a vulnerability privately through **Security › Report a vulnerability**
 | `KORAI_PROBE_STATE_DIR` | `/var/lib/korai-probe` | Credential, cached checks and results waiting to be sent. |
 | `KORAI_REDIS_SLOWLOG` | | Optional. Redis / Valkey URLs whose slowlog the probe reads (see above). |
 | `KORAI_REDIS_CA_FILE` | | Optional. CA certificate (PEM) for `rediss://` servers, e.g. the Memorystore server CA. |
-| `KORAI_REDIS_SLOWLOG_KEYS` | `1` | `0` sends only command names, not key patterns. |
+| `KORAI_REDIS_SLOWLOG_KEYS` | `0` | `1` also sends key patterns (see Privacy). |
 | `HTTPS_PROXY`, `NO_PROXY` | | A proxy for reaching Korai. |
 
 ## Develop
