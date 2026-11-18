@@ -54,6 +54,10 @@ func (a *agent) run(ctx context.Context) {
 	wg.Add(2)
 	go func() { defer wg.Done(); a.configLoop(ctx) }()
 	go func() { defer wg.Done(); a.sendLoop(ctx) }()
+	if sl := newSlowlog(a.st, os.Getenv); sl != nil {
+		wg.Add(1)
+		go func() { defer wg.Done(); sl.run(ctx) }()
+	}
 	a.minuteLoop(ctx)
 	wg.Wait()
 	// One last try to deliver what is waiting; whatever is not delivered stays on disk for the next start.

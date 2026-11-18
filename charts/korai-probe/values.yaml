@@ -15,6 +15,18 @@ persistence:
   size: 256Mi
   storageClass: ""
 
+# Optional: read the SLOWLOG of Redis / Valkey servers in this network (self-hosted, Memorystore, ElastiCache) and
+# show it in Korai (Observability > Infrastructure > Redis > Slow commands). Argument values are never sent.
+redisSlowlog:
+  # redis:// or rediss:// (TLS) URLs, separated by commas: redis://[user:password@]host[:port][?name=label]
+  urls: ""
+  # Or the name of an existing Secret holding them under the key "urls" (then "urls" above is not used).
+  existingSecret: ""
+  # A Secret with the CA certificate of the servers under the key "ca.crt" (Memorystore with in-transit encryption).
+  caSecret: ""
+  # false: send only command names, not even key patterns.
+  keys: true
+
 # Only for reaching Korai, never for the checks.
 httpsProxy: ""
 noProxy: ""

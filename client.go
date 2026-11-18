@@ -141,3 +141,17 @@ func postResults(ctx context.Context, st *State, rs []Result, buffered int) erro
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return resp.Body.Close()
 }
+
+// postSlowlog sends Redis slow commands and the status of each server the probe reads.
+func postSlowlog(ctx context.Context, st *State, es []SlowEntry, ts []TargetStatus) error {
+	if es == nil {
+		es = []SlowEntry{}
+	}
+	resp, err := call(ctx, "POST", st.KoraiURL+"/api/probe/v1/slowlog", st.Credential,
+		map[string]any{"entries": es, "targets": ts, "version": version}, nil)
+	if err != nil {
+		return err
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	return resp.Body.Close()
+}
