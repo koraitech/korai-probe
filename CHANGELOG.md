@@ -2,6 +2,20 @@
 
 Each release has a section here; the release workflow uses it as the GitHub release notes.
 
+## v1.1.0
+
+### Redis slowlog
+
+- Optional: with `KORAI_REDIS_SLOWLOG` set to one or more `redis://` / `rediss://` URLs, the probe reads the `SLOWLOG`
+  of those Redis and Valkey servers every 30 seconds (self-hosted, Memorystore, ElastiCache) and sends the slow
+  commands to Korai (Observability › Infrastructure › Redis › Slow commands).
+- Argument values, client addresses and client names never leave the probe: only the command name and the key as a
+  pattern (`GET cart:91822` is sent as `GET cart:?`). `KORAI_REDIS_SLOWLOG_KEYS=0` sends only command names.
+- TLS with a custom CA (`KORAI_REDIS_CA_FILE`, the Memorystore server CA), ACL users and AUTH strings.
+- Each server's status shows on the probe in Korai. Server restarts and `SLOWLOG RESET` are handled; no entry is sent
+  twice.
+- Helm: `redisSlowlog.urls` or `redisSlowlog.existingSecret`, `redisSlowlog.caSecret`, `redisSlowlog.keys`.
+
 ## v1.0.0
 
 First release of the Korai private probe: run Korai uptime checks inside your own network.

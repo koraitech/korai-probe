@@ -12,6 +12,17 @@ stringData:
   token: {{ .Values.token | quote }}
 ---
 {{- end }}
+{{- if and .Values.redisSlowlog.urls (not .Values.redisSlowlog.existingSecret) }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "korai-probe.redisSecret" . }}
+  labels: {{- include "korai-probe.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  urls: {{ .Values.redisSlowlog.urls | quote }}
+---
+{{- end }}
 {{- if .Values.persistence.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -61,6 +72,17 @@ spec:
             - name: KORAI_PROBE_TOKEN
               valueFrom:
                 secretKeyRef: { name: {{ include "korai-probe.secret" . }}, key: token }
+            {{- if or .Values.redisSlowlog.urls .Values.redisSlowlog.existingSecret }}
+            - name: KORAI_REDIS_SLOWLOG
+              valueFrom:
+                secretKeyRef: { name: {{ include "korai-probe.redisSecret" . }}, key: urls }
+            {{- if not .Values.redisSlowlog.keys }}
+            - { name: KORAI_REDIS_SLOWLOG_KEYS, value: "0" }
+            {{- end }}
+            {{- if .Values.redisSlowlog.caSecret }}
+            - { name: KORAI_REDIS_CA_FILE, value: /etc/korai-probe/redis-ca/ca.crt }
+            {{- end }}
+            {{- end }}
             {{- with .Values.httpsProxy }}
             - { name: HTTPS_PROXY, value: {{ . | quote }} }
             {{- end }}
@@ -74,7 +96,14 @@ spec:
           resources: {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - { name: state, mountPath: /var/lib/korai-probe }
+            {{- if .Values.redisSlowlog.caSecret }}
+            - { name: redis-ca, mountPath: /etc/korai-probe/redis-ca, readOnly: true }
+            {{- end }}
       volumes:
+        {{- if .Values.redisSlowlog.caSecret }}
+        - name: redis-ca
+          secret: { secretName: {{ .Values.redisSlowlog.caSecret }} }
+        {{- end }}
         - name: state
           {{- if .Values.persistence.enabled }}
           persistentVolumeClaim: { claimName: {{ .Release.Name }}-state }

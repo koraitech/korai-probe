@@ -25,5 +25,6 @@ jobs:
         run: |
           helm lint charts/korai-probe --set token=kpe1.example
           helm template t charts/korai-probe --set token=kpe1.example > /dev/null
+          helm template t charts/korai-probe --set token=kpe1.example --set redisSlowlog.urls=redis://10.0.0.3 --set redisSlowlog.caSecret=ca --set redisSlowlog.keys=false > /dev/null
       - name: Image builds
         run: docker build -t korai-probe:ci .
