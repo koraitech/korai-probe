@@ -75,6 +75,8 @@ jobs:
           fi
       # The release notes to the team's Slack channel. No secret skips it; a failed post is a warning.
       - name: Post the release notes to Slack
+        continue-on-error: true
+        timeout-minutes: 2
         env:
           GH_TOKEN: ${{ github.token }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}

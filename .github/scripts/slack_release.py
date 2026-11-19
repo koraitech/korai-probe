@@ -26,6 +26,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -49,7 +50,8 @@ def inline(text: str) -> str:
 def change(item: str) -> str:
     m = GENERATED.match(item)
     if m:
-        return f"<{m['url']}|#{m['num']}> {inline(m['title'])} ({escape(m['user'])})"
+        # a PR title is contributor text: escaped, so it cannot carry its own links
+        return f"<{m['url']}|#{m['num']}> {escape(m['title'])} ({escape(m['user'])})"
     return inline(item)
 
 
@@ -106,7 +108,8 @@ def message(name: str, tag: str, url: str, body: str, headline: str | None = Non
         blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "_No notes._"}})
     total = f"{len(items)} change{'s' if len(items) != 1 else ''} · " if items else ""
     blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"{total}{link}"}]})
-    return {"text": f"{name} {tag} {headline or 'released'}", "blocks": blocks, "unfurl_links": False}
+    return {"text": f"{name} {tag} {headline or 'released'}", "blocks": blocks, "unfurl_links": False,
+            "unfurl_media": False}
 
 
 def release(tag: str) -> dict:
@@ -136,7 +139,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("--per-section", type=int, default=8)
     p.add_argument("--dry-run", action="store_true", help="print the message instead of posting it")
     a = p.parse_args(argv)
-    webhook = os.environ.get("SLACK_WEBHOOK", "")
+    webhook = os.environ.get("SLACK_WEBHOOK", "").strip()
     if not webhook and not a.dry_run:
         print("::warning::SLACK_WEBHOOK is not set: the release was not posted to Slack.")
         return 0
@@ -150,7 +153,9 @@ def main(argv: list[str]) -> int:
             post(webhook, payload)
             print(f"Posted {a.name} {a.tag} to Slack.")
     except Exception as e:  # never fail the release over the announcement
-        print(f"::warning::Could not post {a.name} {a.tag} to Slack: {type(e).__name__}: {e}")
+        # only the error type and HTTP status: an exception's text can contain the webhook URL
+        status = f" {e.code}" if isinstance(e, urllib.error.HTTPError) else ""
+        print(f"::warning::Could not post {a.name} {a.tag} to Slack: {type(e).__name__}{status}")
     return 0
 
 
