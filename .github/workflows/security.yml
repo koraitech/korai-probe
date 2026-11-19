@@ -2,6 +2,8 @@
 # SAST and GitHub Actions hardening.
 #
 # - Pull requests: report-only, except new secrets in the PR commits (fails).
+# - Secrets found by the daily scan (all branches) fail the run, but only
+#   after every scanner has run, so the summary is complete.
 # - Daily, Mon-Fri 07:15 UTC (08:15/09:15 Madrid), while the CI runners
 #   are already warm: full scan incl. git history; reports kept as an
 #   artifact so the weekly review can triage them (private repos only).
@@ -67,13 +69,16 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p reports
+          # The step shell runs with -e, so keep gitleaks' exit code instead
+          # of letting a finding end the step (and skip the other scanners).
+          rc=0
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
-            gitleaks git --redact --no-banner --log-opts="$range" -f json -r reports/gitleaks.json . >/dev/null 2>&1
+            gitleaks git --redact --no-banner --log-opts="$range" -f json -r reports/gitleaks.json . >/dev/null 2>&1 || rc=$?
           else
-            gitleaks git --redact --no-banner -f json -r reports/gitleaks.json . >/dev/null 2>&1
+            gitleaks git --redact --no-banner -f json -r reports/gitleaks.json . >/dev/null 2>&1 || rc=$?
           fi
-          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
 
       - name: Dependencies, IaC, Dockerfiles, K8s (trivy)
         run: |
@@ -138,8 +143,12 @@ jobs:
           path: reports/
           retention-days: 14
 
-      - name: Fail on new secrets in this PR
-        if: github.event_name == 'pull_request' && steps.secrets.outputs.rc == '1'
+      - name: Fail on secrets
+        if: steps.secrets.outputs.rc == '1'
         run: |
-          echo "::error::gitleaks found a secret in this PR's commits. Rotate it and remove it from history."
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "::error::gitleaks found a secret in this PR's commits. Rotate it and remove it from history."
+          else
+            echo "::error::gitleaks found a secret in a branch's history. Rotate it, or add its fingerprint to .gitleaksignore if it is a reviewed false positive."
+          fi
           exit 1

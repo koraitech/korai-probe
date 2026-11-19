@@ -1,0 +1,6 @@
+# Reviewed false positives (gitleaks fingerprints, one per line).
+# Made-up Redis keys in a slowlog test on branch claude/project-thread-yaruaq
+# (commit 15facc5, never merged; main uses other sample values).
+15facc55c2f47fdd19f1c9e650d2313ebed0285e:slowlog_test.go:generic-api-key:287
+15facc55c2f47fdd19f1c9e650d2313ebed0285e:slowlog_test.go:generic-api-key:288
+15facc55c2f47fdd19f1c9e650d2313ebed0285e:slowlog_test.go:generic-api-key:289
