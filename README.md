@@ -118,7 +118,8 @@ KORAI_PROBE_STATE_DIR=/tmp/kp KORAI_PROBE_TOKEN='<token>' go run .
 Bump `version` in `main.go` and `appVersion` in `charts/korai-probe/Chart.yaml`, add a `## vX.Y.Z` section to
 `CHANGELOG.md` (it becomes the release notes), then push a tag `vX.Y.Z`. The release
 workflow publishes the multi-arch image `ghcr.io/koraitech/korai-probe:{X.Y.Z,X.Y,X}`, the chart
-`oci://ghcr.io/koraitech/charts/korai-probe` and a GitHub release with the binaries.
+`oci://ghcr.io/koraitech/charts/korai-probe` and a GitHub release with the binaries, and posts the release
+notes to the team's Slack channel (secret `SLACK_RELEASES_WEBHOOK`).
 
 ## License
 

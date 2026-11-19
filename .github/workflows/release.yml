@@ -73,3 +73,11 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
           fi
+      # The release notes to the team's Slack channel. No secret skips it; a failed post is a warning.
+      - name: Post the release notes to Slack
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+        run: python3 .github/scripts/slack_release.py "$GITHUB_REF_NAME" --name korai-probe --headline "released (image, chart and binaries)"
