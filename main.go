@@ -5,9 +5,6 @@
 // token for its own credential, kept in KORAI_PROBE_STATE_DIR (default /var/lib/korai-probe). It then downloads its
 // checks every minute, runs them on the minute, and posts the results over outbound HTTPS. While Korai cannot be
 // reached the results wait on disk (up to seven days) and are sent later, in order.
-//
-// Optionally (KORAI_REDIS_SLOWLOG) it also reads the SLOWLOG of Redis / Valkey servers in the same network and sends
-// the slow commands to Korai, without argument values (slowlog.go).
 package main
 
 import (
